@@ -121,8 +121,25 @@ func TestMySuite(t *testing.T) {
 ### Integration Tests with testcontainers
 
 - Use `testcontainers-go` with `pgvector/pgvector:pg16` for database tests.
+- Use `testcontainers-go` with `ollama/ollama:latest` for embedding tests.
+- Reusable containers are in `internal/testcontainers/` — use `NewPostgres()` and `NewOllama()`.
 - Container starts once in `SetupSuite`, terminates in `TearDownSuite`.
 - Run with `-short` flag to skip integration tests in CI fast-feedback loops.
+
+### Running Tests
+
+**CRITICAL: Always run tests sequentially with `-p=1` flag!**
+
+```bash
+go test ./... -count=1 -p=1
+```
+
+Why? Multiple packages run in parallel by default, causing Docker resource contention when multiple Ollama/Postgres containers start simultaneously. This leads to flaky 404 errors and race conditions.
+
+- `-p=1`: Run one package at a time (sequential)
+- `-count=1`: Disable test caching
+- `-short`: Skip integration tests (for fast feedback)
+- `-v`: Verbose output (for debugging)
 
 ### What to Assert
 

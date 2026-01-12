@@ -4,14 +4,11 @@ import (
 	"context"
 	"log"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/andreas-lindfalk/bobby/internal/store"
+	"github.com/andreas-lindfalk/bobby/internal/testcontainers"
 )
 
 // StoreSuite is the integration test suite for the store package.
@@ -19,7 +16,7 @@ import (
 type StoreSuite struct {
 	suite.Suite
 	store     *store.Store
-	container *postgres.PostgresContainer
+	container *testcontainers.PostgresContainer
 	ctx       context.Context
 }
 
@@ -28,23 +25,10 @@ func (s *StoreSuite) SetupSuite() {
 	s.ctx = context.Background()
 
 	var err error
-	s.container, err = postgres.Run(s.ctx,
-		"pgvector/pgvector:pg16",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second),
-		),
-	)
+	s.container, err = testcontainers.NewPostgres(s.ctx)
 	s.Require().NoError(err, "failed to start postgres container")
 
-	connString, err := s.container.ConnectionString(s.ctx, "sslmode=disable")
-	s.Require().NoError(err, "failed to get connection string")
-
-	s.store, err = store.New(s.ctx, connString)
+	s.store, err = store.New(s.ctx, s.container.ConnStr)
 	s.Require().NoError(err, "failed to create store")
 
 	err = s.store.MigrateWithSeeds(s.ctx)

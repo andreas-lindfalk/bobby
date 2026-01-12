@@ -17,5 +17,5 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source);
--- IVFFlat index for cosine similarity search (requires fixed dimensions)
-CREATE INDEX IF NOT EXISTS idx_documents_embedding ON documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+-- HNSW index for cosine similarity search (works well for small and large datasets)
+CREATE INDEX IF NOT EXISTS idx_documents_embedding ON documents USING hnsw (embedding vector_cosine_ops);

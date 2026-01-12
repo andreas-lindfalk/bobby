@@ -2,23 +2,17 @@ package embeddings_test
 
 import (
 	"context"
-	"fmt"
-	"io"
-	"net/http"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/andreas-lindfalk/bobby/internal/embeddings"
+	"github.com/andreas-lindfalk/bobby/internal/testcontainers"
 )
 
 type OllamaIntegrationSuite struct {
 	suite.Suite
-	container testcontainers.Container
+	container *testcontainers.OllamaContainer
 	embedder  *embeddings.OllamaEmbedder
 	ctx       context.Context
 }
@@ -33,40 +27,15 @@ func TestOllamaIntegrationSuite(t *testing.T) {
 func (s *OllamaIntegrationSuite) SetupSuite() {
 	s.ctx = context.Background()
 
-	req := testcontainers.ContainerRequest{
-		Image:        "ollama/ollama:latest",
-		ExposedPorts: []string{"11434/tcp"},
-		WaitingFor: wait.ForHTTP("/").
-			WithPort("11434").
-			WithStartupTimeout(60 * time.Second),
-		Mounts: testcontainers.ContainerMounts{
-			{
-				Source: testcontainers.GenericVolumeMountSource{
-					Name: "bobby-ollama-models",
-				},
-				Target: "/root/.ollama",
-			},
-		},
-	}
-
-	container, err := testcontainers.GenericContainer(s.ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
+	var err error
+	s.container, err = testcontainers.NewOllama(s.ctx)
 	s.Require().NoError(err, "failed to start Ollama container")
-	s.container = container
 
-	host, err := container.Host(s.ctx)
-	s.Require().NoError(err)
-	port, err := container.MappedPort(s.ctx, "11434")
-	s.Require().NoError(err)
-
-	ollamaURL := fmt.Sprintf("http://%s:%s", host, port.Port())
-
-	s.pullModel(ollamaURL, "nomic-embed-text")
+	err = s.container.PullModel(s.ctx, "nomic-embed-text")
+	s.Require().NoError(err, "failed to pull model")
 
 	s.embedder = embeddings.NewOllamaEmbedder(
-		embeddings.WithOllamaURL(ollamaURL),
+		embeddings.WithOllamaURL(s.container.URL),
 	)
 }
 
@@ -74,41 +43,6 @@ func (s *OllamaIntegrationSuite) TearDownSuite() {
 	if s.container != nil {
 		if err := s.container.Terminate(s.ctx); err != nil {
 			s.T().Logf("failed to terminate Ollama container: %v", err)
-		}
-	}
-}
-
-func (s *OllamaIntegrationSuite) pullModel(ollamaURL, model string) {
-	s.T().Logf("Checking model %s...", model)
-
-	listResp, err := http.Get(ollamaURL + "/api/tags")
-	s.Require().NoError(err)
-	defer listResp.Body.Close()
-
-	body, _ := io.ReadAll(listResp.Body)
-	if strings.Contains(string(body), model) {
-		s.T().Logf("Model %s already cached", model)
-		return
-	}
-
-	s.T().Logf("Pulling model %s (first run only)...", model)
-	pullReq := strings.NewReader(fmt.Sprintf(`{"name": "%s"}`, model))
-	resp, err := http.Post(ollamaURL+"/api/pull", "application/json", pullReq)
-	s.Require().NoError(err)
-	defer resp.Body.Close()
-
-	buf := make([]byte, 1024)
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 && strings.Contains(string(buf[:n]), "success") {
-			s.T().Logf("Model %s pulled successfully", model)
-			break
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			s.Require().NoError(err)
 		}
 	}
 }
