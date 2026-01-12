@@ -69,3 +69,66 @@ Claude's Instruction: When suggesting features or code, always categorize the ta
 - **Testing:** Unit tests for all domain logic; integration tests for flows.
 - **Error Handling:** Use explicit error returns (Go style). Wrap errors with context.
 - **Commits:** Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`).
+
+## 9. Testing Standards
+
+Testing is critical. All code changes must be covered by proper tests with thorough assertions. We follow these principles:
+
+### Test Framework & Assertions
+
+- **Use `github.com/stretchr/testify/suite`** for integration tests requiring shared setup/teardown.
+- **ALWAYS use `s.Require()` (not `s.Assert()`)**. Fail-fast on first error — no point continuing if preconditions fail.
+- Example: `s.Require().NoError(err)`, `s.Require().Len(items, 3)`, `s.Require().Equal(expected, actual)`
+
+### Test Isolation & Cleanup
+
+- **Defer cleanup immediately after insert**: Insert test data, then `defer s.deleteXxx(id)` on the next line.
+- **Never leave test data behind**: Each test cleans up its own data, so tests remain independent.
+- **Add "cleanup verification" tests**: Explicitly verify that previous tests' data was removed.
+
+### Test Suite Pattern (Integration Tests)
+
+```go
+type MySuite struct {
+    suite.Suite
+    store *store.Store
+    ctx   context.Context
+}
+
+func (s *MySuite) SetupSuite() {
+    // Start testcontainer, create store, run migrations ONCE
+}
+
+func (s *MySuite) TearDownSuite() {
+    // Close connections, terminate container
+}
+
+func TestMySuite(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping integration test suite")
+    }
+    suite.Run(t, new(MySuite))
+}
+```
+
+### Test Structure
+
+1. **Arrange**: Set up test data with helper methods (`s.insertTestDocument(...)`)
+2. **Defer cleanup**: `defer s.deleteDocument(id)` — immediately after insert
+3. **Act**: Call the method under test
+4. **Assert**: Thorough assertions with `s.Require()` — check all relevant fields
+
+### Integration Tests with testcontainers
+
+- Use `testcontainers-go` with `pgvector/pgvector:pg16` for database tests.
+- Container starts once in `SetupSuite`, terminates in `TearDownSuite`.
+- Run with `-short` flag to skip integration tests in CI fast-feedback loops.
+
+### What to Assert
+
+- **Lengths**: `s.Require().Len(results, expected)` — exact count matters
+- **Empty checks**: `s.Require().Empty(results)` for no-data scenarios
+- **Field values**: Check all business-critical fields, not just existence
+- **Ordering**: If sorted, verify order with loop: `s.Require().LessOrEqual(prev, curr)`
+- **Edge cases**: Empty inputs, non-existent IDs, boundary conditions
+
