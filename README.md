@@ -21,5 +21,5 @@ A digital bridge between Spanish bureaucracy/service providers and expat homeown
 
 - **Language:** Go (Golang)
 - **Orchestration:** Firebase Genkit
-- **AI Models:** Claude Opus 4.5 / Gemini 3 Pro
+- **AI Models:** Claude Opus 4.5 / Gemini 2.5 Pro
 - **Interface:** Model Context Protocol (MCP)

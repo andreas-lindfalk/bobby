@@ -21,11 +21,16 @@ func main() {
 	dbURL := flag.String("db", envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/bobby?sslmode=disable"), "PostgreSQL connection URL")
 	ollamaURL := flag.String("ollama", envOrDefault("OLLAMA_URL", "http://localhost:11434"), "Ollama API URL")
 	embeddingModel := flag.String("embedding-model", envOrDefault("EMBEDDING_MODEL", "nomic-embed-text"), "Embedding model name")
-	llmModel := flag.String("model", envOrDefault("LLM_MODEL", "googleai/gemini-3-flash"), "LLM model name")
+	llmModel := flag.String("model", envOrDefault("LLM_MODEL", "googleai/gemini-2.5-flash"), "LLM model name")
 	port := flag.String("port", envOrDefault("PORT", "3400"), "Server port")
 	flag.Parse()
 
 	ctx := context.Background()
+
+	// Check for API key
+	if os.Getenv("GEMINI_API_KEY") == "" && os.Getenv("GOOGLE_API_KEY") == "" {
+		log.Fatal("GEMINI_API_KEY environment variable is required")
+	}
 
 	log.Println("Starting Bobby - Car Import Assistant")
 	log.Printf("LLM Model: %s", *llmModel)
