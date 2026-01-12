@@ -14,7 +14,7 @@
 - **Architectural Pattern:** Agentic Workflows (Multi-agent system), RAG (Retrieval-Augmented Generation).
 - **Interface:** Model Context Protocol (MCP) for real-time tool use (weather, currency, local govt APIs).
 - **Database:** Vector Database (e.g., Supabase/pgvector or ChromaDB).
-- **Models:** Claude Opus 4.5 / Gemini 1.5 Pro for reasoning; Gemini 1.5 Flash for ingestion/summarization.
+- **Models:** Claude Opus 4.5 / Gemini 3 Pro for reasoning; Gemini 3 Flash for ingestion/summarization.
 
 ## 3. Developer Persona & Context
 
@@ -55,7 +55,7 @@ To ensure scalability and minimize manual maintenance, the system follows a thre
 - **Layer 1:** Generalist Intelligence (Zero-Touch): Use LLM base knowledge + Google Search/Tavily for non-critical expat questions (e.g., "Where is the nearest pharmacy?"). No custom Go logic required.
 
 - **Layer 2:** Autonomous Scout (Agentic RAG): An automated Go-based pipeline that monitors a curated list of "Master Sources" (Official bulletins, local news).
-  - **Logic:** Periodically scrape, summarize with Gemini Flash, and upsert to Vector DB.
+  - **Logic:** Periodically scrape, summarize with Gemini 3 Flash, and upsert to Vector DB.
   - **Goal:** Handle 80% of local info updates without developer intervention.
 
 - **Layer 3:** Vertical Business Flows (Deep Logic): Hard-coded, high-precision Go modules for high-value transactions (Car Import, RUT/ROT, Escrow).

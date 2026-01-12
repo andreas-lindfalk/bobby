@@ -21,7 +21,7 @@ func main() {
 	dbURL := flag.String("db", envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/bobby?sslmode=disable"), "PostgreSQL connection URL")
 	ollamaURL := flag.String("ollama", envOrDefault("OLLAMA_URL", "http://localhost:11434"), "Ollama API URL")
 	embeddingModel := flag.String("embedding-model", envOrDefault("EMBEDDING_MODEL", "nomic-embed-text"), "Embedding model name")
-	llmModel := flag.String("model", envOrDefault("LLM_MODEL", "googleai/gemini-2.5-flash"), "LLM model name")
+	llmModel := flag.String("model", envOrDefault("LLM_MODEL", "googleai/gemini-3-flash"), "LLM model name")
 	port := flag.String("port", envOrDefault("PORT", "3400"), "Server port")
 	flag.Parse()
 

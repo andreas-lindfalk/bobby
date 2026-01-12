@@ -17,7 +17,7 @@ import (
 type Config struct {
 	Store       *store.Store
 	Embedder    embeddings.Embedder
-	ModelName   string // e.g., "googleai/gemini-2.5-flash"
+	ModelName   string // e.g., "googleai/gemini-3-flash"
 	RAGTopK     int    // Number of documents to retrieve (default: 5)
 	Temperature float32
 }
