@@ -2,10 +2,54 @@ package agent
 
 import (
 	"context"
+	"sync"
 
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 )
+
+// SessionInput represents input with a session ID for memory.
+type SessionInput struct {
+	SessionID string `json:"session_id"`
+	Message   string `json:"message"`
+}
+
+// SessionOutput represents output with session context.
+type SessionOutput struct {
+	SessionID string `json:"session_id"`
+	Response  string `json:"response"`
+}
+
+// sessionStore holds conversation history per session (in-memory).
+type sessionStore struct {
+	mu       sync.RWMutex
+	sessions map[string][]Message
+}
+
+var sessions = &sessionStore{
+	sessions: make(map[string][]Message),
+}
+
+func (s *sessionStore) get(id string) []Message {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if history, ok := s.sessions[id]; ok {
+		// Return a copy to avoid race conditions
+		result := make([]Message, len(history))
+		copy(result, history)
+		return result
+	}
+	return nil
+}
+
+func (s *sessionStore) append(id string, userMsg, modelMsg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions[id] = append(s.sessions[id],
+		Message{Role: "user", Content: userMsg},
+		Message{Role: "model", Content: modelMsg},
+	)
+}
 
 // ChatInput represents user input to the chat flow.
 type ChatInput struct {
@@ -66,7 +110,7 @@ func (a *Agent) DefineCarImportChatFlow() {
 	)
 }
 
-// DefineSimpleQueryFlow defines a non-streaming flow for simple queries.
+// DefineSimpleQueryFlow defines a non-streaming flow for simple queries (stateless).
 func (a *Agent) DefineSimpleQueryFlow() {
 	genkit.DefineFlow(a.g, "carImportQuery",
 		func(ctx context.Context, query string) (string, error) {
@@ -80,6 +124,41 @@ func (a *Agent) DefineSimpleQueryFlow() {
 				return "", err
 			}
 			return resp.Text(), nil
+		},
+	)
+}
+
+// DefineSessionFlow defines a flow with server-side session memory.
+// Use session_id to maintain conversation context across requests.
+func (a *Agent) DefineSessionFlow() {
+	genkit.DefineFlow(a.g, "chat",
+		func(ctx context.Context, input SessionInput) (*SessionOutput, error) {
+			// Get existing history for this session
+			history := sessions.get(input.SessionID)
+
+			// Build messages from history
+			messages := buildMessages(history, input.Message)
+
+			// Generate response with tools
+			resp, err := genkit.Generate(ctx, a.g,
+				ai.WithModelName(a.config.ModelName),
+				ai.WithSystem(SystemPrompt()),
+				ai.WithMessages(messages...),
+				ai.WithTools(a.tools...),
+			)
+			if err != nil {
+				return nil, err
+			}
+
+			responseText := resp.Text()
+
+			// Store in session
+			sessions.append(input.SessionID, input.Message, responseText)
+
+			return &SessionOutput{
+				SessionID: input.SessionID,
+				Response:  responseText,
+			}, nil
 		},
 	)
 }

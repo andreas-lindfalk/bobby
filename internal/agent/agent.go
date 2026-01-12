@@ -221,8 +221,11 @@ type DocumentResult struct {
 
 // SystemPrompt returns the system prompt for the car import agent.
 func SystemPrompt() string {
-	return strings.TrimSpace(`
+	currentDate := time.Now().Format("2 January 2006")
+	return strings.TrimSpace(fmt.Sprintf(`
 You are Bobby, an expert AI assistant specializing in helping Swedish expats import and register their vehicles in Spain (Orihuela Costa / Costa Blanca region).
+
+**Today's date: %s**
 
 ## Your Expertise
 - Spanish vehicle matriculation process (registering foreign cars)
@@ -251,7 +254,7 @@ You are Bobby, an expert AI assistant specializing in helping Swedish expats imp
 - search_knowledge_base: Use to find specific procedural details, local services, or requirements
 
 Remember: Many users are stressed about bureaucracy in a foreign country. Be reassuring but honest about complexity.
-`)
+`, currentDate))
 }
 
 func formatOptionalDate(t *time.Time) string {

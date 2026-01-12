@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/andreas-lindfalk/bobby/internal/agent"
@@ -82,8 +84,9 @@ func main() {
 	// Define flows
 	carAgent.DefineCarImportChatFlow()
 	carAgent.DefineSimpleQueryFlow()
+	carAgent.DefineSessionFlow()
 
-	log.Printf("Registered flows: carImportChat, carImportQuery")
+	log.Printf("Registered flows: carImportChat, carImportQuery, chat")
 
 	// Set up HTTP server for flows
 	mux := http.NewServeMux()
@@ -102,12 +105,28 @@ func main() {
 
 	// Start server
 	addr := ":" + *port
-	log.Printf("Server listening on %s", addr)
-	log.Printf("Try: curl -X POST http://localhost%s/carImportQuery -H 'Content-Type: application/json' -d '{\"data\":\"I arrived in Spain 3 months ago with my Volvo. What do I need to do?\"}'", addr)
+	server := &http.Server{Addr: addr, Handler: mux}
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	// Graceful shutdown on Ctrl+C
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+		log.Println("\nShutting down server...")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	log.Printf("Server listening on %s", addr)
+	log.Printf("Try: curl -X POST http://localhost%s/chat -H 'Content-Type: application/json' -d '{\"data\":{\"session_id\":\"test\",\"message\":\"I arrived in Spain 3 months ago with my Volvo.\"}}'", addr)
+
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("Server failed: %v", err)
 	}
+	log.Println("Server stopped")
 }
 
 func envOrDefault(key, defaultValue string) string {
