@@ -39,9 +39,18 @@ type VehicleImportOutput struct {
 	Deadlines          carimport.DeadlineResult `json:"deadlines"`
 	TaxEstimate        *carimport.TaxEstimate   `json:"tax_estimate,omitempty"`
 	ActionPlan         []ActionItem             `json:"action_plan,omitempty"`
+	RAGContext         []RAGDocument            `json:"rag_context,omitempty"` // Relevant docs from knowledge base
 	IsHotLead          bool                     `json:"is_hot_lead"`
 	RecommendedNext    string                   `json:"recommended_next"`
 	RecommendedPartner *PartnerRecommendation   `json:"recommended_partner,omitempty"`
+}
+
+// RAGDocument represents a relevant document from the knowledge base.
+type RAGDocument struct {
+	Title   string `json:"title"`
+	Summary string `json:"summary,omitempty"`
+	Source  string `json:"source"`
+	URL     string `json:"url,omitempty"`
 }
 
 // PartnerRecommendation represents a recommended gestoría or service provider.
@@ -68,9 +77,15 @@ type ActionItem struct {
 	WaitDays       int    `json:"wait_days,omitempty"` // Expected wait time for appointments
 }
 
+// Embedder generates vector embeddings for RAG queries.
+type Embedder interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
+}
+
 // FlowDependencies contains external dependencies for the flow.
 type FlowDependencies struct {
-	Store *store.Store
+	Store    *store.Store
+	Embedder Embedder // Optional: enables RAG context retrieval
 }
 
 // RunVehicleImportFlow executes the vehicle import workflow.
@@ -89,7 +104,27 @@ func RunVehicleImportFlow(ctx context.Context, input VehicleImportInput, deps *F
 	output.Deadlines = carimport.CalculateDeadlines(userCtx)
 	output.State = StateDeadlineCheck
 
-	// Step 2: Calculate tax if car details provided
+	// Step 2: Query RAG for relevant context
+	if deps != nil && deps.Store != nil && deps.Embedder != nil {
+		query := "Swedish car import to Spain matriculation registration tax ITV"
+		if input.IsElectric {
+			query += " electric vehicle EV exemption"
+		}
+		if embedding, err := deps.Embedder.Embed(ctx, query); err == nil {
+			if docs, err := deps.Store.SearchByEmbedding(ctx, embedding, 3); err == nil {
+				for _, doc := range docs {
+					output.RAGContext = append(output.RAGContext, RAGDocument{
+						Title:   doc.Title,
+						Summary: doc.Summary,
+						Source:  doc.Source,
+						URL:     doc.URL,
+					})
+				}
+			}
+		}
+	}
+
+	// Step 3: Calculate tax if car details provided
 	if input.CarValue > 0 {
 		car := carimport.CarDetails{
 			Value:        input.CarValue,
@@ -102,7 +137,7 @@ func RunVehicleImportFlow(ctx context.Context, input VehicleImportInput, deps *F
 		output.State = StateTaxAssessment
 	}
 
-	// Step 3: Generate action plan
+	// Step 4: Generate action plan
 	var itv *store.ITVStation
 	if deps != nil && deps.Store != nil {
 		itv, _ = deps.Store.GetBestITVForImports(ctx) // Ignore error, just use default if not available
@@ -110,7 +145,7 @@ func RunVehicleImportFlow(ctx context.Context, input VehicleImportInput, deps *F
 	output.ActionPlan = generateActionPlan(output.Deadlines, output.TaxEstimate, itv)
 	output.State = StateActionPlan
 
-	// Step 4: Check for hot lead and get partner recommendation
+	// Step 5: Check for hot lead and get partner recommendation
 	output.IsHotLead = carimport.IsHotLead(output.Deadlines)
 	if output.IsHotLead {
 		output.State = StateLeadHandoff

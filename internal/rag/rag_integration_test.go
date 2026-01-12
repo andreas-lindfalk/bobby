@@ -3,10 +3,12 @@ package rag_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
 	"github.com/andreas-lindfalk/bobby/internal/embeddings"
+	"github.com/andreas-lindfalk/bobby/internal/flows"
 	"github.com/andreas-lindfalk/bobby/internal/store"
 	"github.com/andreas-lindfalk/bobby/internal/testcontainers"
 )
@@ -153,4 +155,58 @@ func (s *RAGIntegrationSuite) TestSemanticVsTextSearch() {
 	}
 	s.Require().NotEmpty(embResults, "semantic search should find 'vehicle matriculation' when querying 'car registration'")
 	s.Require().Equal("Matriculation Requirements DGT", embResults[0].Title)
+}
+
+func (s *RAGIntegrationSuite) TestFlowWithRAGContext() {
+	// Insert documents that the flow should find
+	docs := []store.Document{
+		{
+			Source:  "dgt",
+			Title:   "Swedish Vehicle Import Requirements",
+			Content: "Swedish vehicles imported to Spain must complete ITV homologation within 30 days of padrón registration.",
+			Summary: "DGT requirements for Swedish car imports",
+		},
+		{
+			Source:  "boe",
+			Title:   "Electric Vehicle Tax Exemption 2024",
+			Content: "Electric vehicles (BEV) are exempt from registration tax (Impuesto de Matriculación) under Spanish law.",
+			Summary: "Tax exemption for electric cars in Spain",
+		},
+	}
+
+	var ids []int
+	for _, doc := range docs {
+		id, err := s.store.InsertDocumentWithEmbedding(s.ctx, doc, s.embedder)
+		s.Require().NoError(err)
+		ids = append(ids, id)
+	}
+	defer func() {
+		for _, id := range ids {
+			_ = s.store.DeleteDocument(s.ctx, id)
+		}
+	}()
+
+	// Run flow with RAG dependencies
+	input := flows.VehicleImportInput{
+		ArrivalDate:  time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC),
+		CarValue:     25000,
+		CO2Emissions: 140,
+	}
+	deps := &flows.FlowDependencies{
+		Store:    s.store,
+		Embedder: s.embedder,
+	}
+
+	output, err := flows.RunVehicleImportFlow(s.ctx, input, deps)
+	s.Require().NoError(err)
+
+	// Verify RAG context was populated
+	s.T().Logf("RAGContext has %d documents", len(output.RAGContext))
+	for i, doc := range output.RAGContext {
+		s.T().Logf("  %d: %s (%s)", i, doc.Title, doc.Source)
+	}
+	s.Require().NotEmpty(output.RAGContext, "flow should retrieve RAG context")
+
+	// First doc should be the Swedish import guide (most relevant to the query)
+	s.Require().Equal("Swedish Vehicle Import Requirements", output.RAGContext[0].Title)
 }
