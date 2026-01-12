@@ -20,9 +20,17 @@ seed:
 build:
 	go build -o bobby ./cmd/bobby
 
+# Build the MCP server
+build-mcp:
+	go build -o bobby-mcp ./cmd/mcp
+
 # Run the server
 run: build
 	./bobby
+
+# Run the MCP server (for Claude Desktop / VS Code)
+run-mcp: build-mcp
+	./bobby-mcp
 
 # Full dev setup: start deps, pull model, seed, run
 dev: up
@@ -42,7 +50,7 @@ test-all:
 
 # Clean up
 clean:
-	rm -f bobby
+	rm -f bobby bobby-mcp
 	docker compose down -v
 
 # Quick chat test
